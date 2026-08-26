@@ -4,24 +4,25 @@ import numpy as np
 import plotly.graph_objects as go
 
 # Oldal konfiguráció
-st.set_page_config(page_title="Szülők UK Örökség Tervezője", layout="wide", page_icon="👴")
+st.set_page_config(page_title="Univerzális UK Örökség & Nyugdíj Tervező", layout="wide", page_icon="🇬🇧")
 
-st.title("👴👵 Nagyszülői UK Adóoptimalizált Stratégia & Biztosítás Ellenőrző")
-st.write("Ez a célszoftver kifejezetten a szüleid egyedi helyzetét szimulálja: az alacsony állami nyugdíj miatti adómentes keret kihasználását és a fix biztosítás kiváltását.")
+st.title("🇬🇧 Univerzális UK Adóoptimalizált Stratégia & Biztosítás Ellenőrző")
+st.write("Ez az univerzális szimulátor alkalmas bármilyen brit életpálya modellezésére 18 éves kortól az alacsony állami nyugdíj miatti adómentes keret kihasználásával.")
 
-# Oldalsávos beállítások
+# Oldalsávos beállítások - MEGNÖVELT, TELJESEN UNIVERZÁLIS CSÚSZKÁK
 st.sidebar.header("📌 Életkor és Időtáv")
-current_age = st.sidebar.slider("Szülő jelenlegi életkora", 60, 74, 66)
-target_age = 100 # Fixen 100 éves korig követjük az életutat az örökség miatt
+current_age = st.sidebar.slider("Jelenlegi életkor", 18, 90, 43, help="A kalkulációt indító személy életkora.")
+working_years = st.sidebar.slider("Hány évig dolgozol / dolgoznak még?", 0, 60, 14, help="Eddig a korig számolunk a havi bruttó fizetéssel és az Aviva munkahelyi befizetésekkel.")
+target_age = 100 # Fixen 100 éves korig követjük az életutat az örökség és élethossz miatt
 
-st.sidebar.header("🏢 Aviva Workplace Pension (Csak ha még dolgozik)")
-working_years = st.sidebar.slider("Hány évig dolgoznak még?", 1, 5, 2)
-gross_salary = st.sidebar.number_input("Havi bruttó fizetés (£)", value=950)
-ee_pct = st.sidebar.slider("Saját hozzájárulás (%)", 0, 10, 4)
-er_pct = st.sidebar.slider("Munkáltatói hozzájárulás (%)", 0, 10, 4)
+st.sidebar.header("🏢 Aviva Workplace Pension (WPP)")
+initial_aviva = st.sidebar.number_input("Jelenlegi Aviva / induló egyenleg (£)", value=11000)
+gross_salary = st.sidebar.number_input("Havi bruttó fizetés (£)", value=1000)
+ee_pct = st.sidebar.slider("Saját hozzájárulás (%)", 0, 20, 4)
+er_pct = st.sidebar.slider("Munkáltatói hozzájárulás (%)", 0, 20, 4)
 
-st.sidebar.header("🏹 Vanguard SIPP & ISA stratégia")
-net_monthly_input = st.sidebar.number_input("Havi tiszta megtakarítás a zsebükből (£)", value=80, help="75 éves korig SIPP-be megy, utána az ISA-ba.")
+st.sidebar.header("🏹 Vanguard SIPP & ISA megtakarítás")
+net_monthly_input = st.sidebar.number_input("Havi tiszta megtakarítás a zsebből (£)", value=80, help="75 éves korig SIPP-be megy (+25% állami pénz), utána az ISA-ba.")
 
 st.sidebar.header("📈 Piaci és Inflációs Beállítások")
 nominal_return = st.sidebar.slider("Várható éves piaci hozam (%)", 1.0, 12.0, 7.5)
@@ -34,7 +35,7 @@ monthly_rate = (1 + annual_real_return) ** (1/12) - 1
 # Alapértékek előkészítése
 ins_months = (target_age - current_age) * 12
 working_months = working_years * 12
-months_to_75 = (75 - current_age) * 12
+months_to_75 = max(0, int((75 - current_age) * 12))
 
 monthly_aviva_total = gross_salary * ((ee_pct + er_pct) / 100)
 sipp_monthly_gross = net_monthly_input * 1.25
@@ -48,12 +49,13 @@ ins_total_paid = []
 hybrid_wealth_trajectory = []
 
 running_insurance_paid = 0
-sim_sipp_balance = 0
+sim_sipp_balance = initial_aviva
 sim_isa_balance = 0
 
 exact_cross_age = None
 gold_cross_age = None
 cross_month_index = ins_months
+lump_sum_moved = False
 
 # Havi szimuláció futtatása
 for m in range(ins_months + 1):
@@ -69,19 +71,17 @@ for m in range(ins_months + 1):
     current_combined_wealth = sim_sipp_balance + sim_isa_balance
     hybrid_wealth_trajectory.append(current_combined_wealth)
     
-    # 1. Veszteségpont figyelése (amikor a piros metszi a zöldet)
     if exact_cross_age is None and running_insurance_paid >= real_payout:
         exact_cross_age = age_at_m
         cross_month_index = m
         
-    # 2. ÚJ: Arany és zöld metszéspont figyelése (amikor a tőzsde lehagyja a biztosítást)
     if gold_cross_age is None and m > 0 and current_combined_wealth >= real_payout:
         gold_cross_age = age_at_m
         
     if m > 0:
         running_insurance_paid += 80 
         
-        # --- 1. FÁZIS: 75 ÉVES KORIG ---
+        # --- 1. FÁZIS: 75 ÉVES KORIG (Vagy amíg el nem érjük a 75-öt) ---
         if age_at_m <= 75:
             if m <= working_months:
                 sim_sipp_balance = sim_sipp_balance * (1 + monthly_rate) + (monthly_aviva_total + sipp_monthly_gross)
@@ -89,11 +89,12 @@ for m in range(ins_months + 1):
                 sim_sipp_balance = sim_sipp_balance * (1 + monthly_rate) + sipp_monthly_gross
             sim_isa_balance = 0
             
-        # --- MELLÉKFÁZIS: PONTOSAN 75 ÉVES KORBAN ---
-        elif m == months_to_75 + 1:
+        # --- MELLÉKFÁZIS: PONTOSAN 75 ÉVES KORBAN (A 25% kifizetés) ---
+        elif age_at_m > 75 and not lump_sum_moved:
             lump_sum_25 = sim_sipp_balance * 0.25
             sim_sipp_balance = sim_sipp_balance * 0.75
             sim_isa_balance = lump_sum_25 
+            lump_sum_moved = True
             
             sim_sipp_balance = sim_sipp_balance * (1 + monthly_rate)
             if sim_sipp_balance >= max_tax_free_drawdown:
@@ -104,7 +105,7 @@ for m in range(ins_months + 1):
                 sim_sipp_balance = 0
             sim_isa_balance = sim_isa_balance * (1 + monthly_rate) + net_monthly_input + actual_drawdown
             
-        # --- 2. FÁZIS: 75 ÉV FELETT ---
+        # --- 2. FÁZIS: 75 ÉV FELETT (Maximális adómentes áttöltés az ISA-ba) ---
         else:
             sim_sipp_balance = sim_sipp_balance * (1 + monthly_rate)
             if sim_sipp_balance >= max_tax_free_drawdown:
@@ -125,7 +126,7 @@ cross_months = total_months_to_cross % 12
 
 # Fő eredményjelző kártyák
 col1, col2 = st.columns(2)
-col1.error(f"⚠️ **Valódi (vásárlóértékű) Veszteségpont:** {exact_cross_age:.1f} évesen (pontosan {cross_years} év és {cross_months} hónap múlva) több pénzt fizetnek be zsebből, mint amit a biztosítás £30,000-os kifizetése AKKOR valójában érni fog!")
+col1.error(f"⚠️ **Valódi (vásárlóértékű) Veszteségpont:** {exact_cross_age:.1f} évesen (pontosan {cross_years} év és {cross_months} hónap múlva) több pénzt fizetsz be zsebből, mint amit a biztosítás £30,000-os kifizetése AKKOR valójában érni fog!")
 hybrid_at_cross = hybrid_wealth_trajectory[cross_month_index]
 col2.success(f"💰 **Ugyanekkor az Adóoptimalizált Hibrid (SIPP+ISA) vagyon:** £{hybrid_at_cross:,.2f} (Mai reálértéken!)")
 
@@ -148,16 +149,18 @@ fig.add_trace(go.Scatter(x=df_szulok["Életkor"], y=df_szulok["ADÓOPTIMALIZÁLT
 
 # Mérföldkő vonalak
 fig.add_vline(x=exact_cross_age, line_dash="dot", line_color="orange", annotation_text=f"Veszteségpont ({exact_cross_age:.1f} év)")
-fig.add_vline(x=75, line_dash="dash", line_color="white", annotation_text="75 év: 25% kifizetés + Max áttöltés indítása")
-fig.add_vline(x=current_age + working_years, line_dash="dash", line_color="cyan", annotation_text="Aviva befizetés vége")
+if current_age < 75:
+    fig.add_vline(x=75, line_dash="dash", line_color="white", annotation_text="75 év: 25% kifizetés + Max áttöltés indítása")
+if working_years > 0:
+    fig.add_vline(x=current_age + working_years, line_dash="dash", line_color="cyan", annotation_text="Munkahelyi WPP vége")
 
-# ÚJ JELZŐVONAL: Arany és zöld metszéspontja
+# Arany és zöld metszéspontja
 if gold_cross_age is not None:
     fig.add_vline(x=gold_cross_age, line_dash="dashdot", line_color="#FFD700", annotation_text=f"Tőzsde lekörözi a biztosítást ({gold_cross_age:.1f} év)")
 
 fig.update_layout(
     title="A NAGY DÖNTÉS: Fix Életbiztosítás VS. Adóoptimalizált Hibrid Tőzsdei Befektetés",
-    xaxis_title="Szülő életkora (év)",
+    xaxis_title="Életkor (év)",
     yaxis_title="Összeg (£)",
     template="plotly_dark",
     height=800,
@@ -165,4 +168,4 @@ fig.update_layout(
 )
 st.plotly_chart(fig, use_container_width=True)
 
-st.info("💡 **A stratégia lényege:** Ez a grafikon tisztán megmutatja, hogy a szüleid havi £80-os befizetéseiből hogyan épül fel a SIPP adókedvezménnyel és az Aviva kiegészítéssel egy komoly tőke, amit 75 évesen a maximális adómentes sebességgel (havi £747.50-es részletekben) kimenekítünk egy Stocks & Shares ISA-ba az unokák részére. Az arany és a zöld vonal közötti olló a tiszta nyereségetek.")
+st.info("💡 **A stratégia lényege:** Ez a kalkulátor most már teljesen univerzális. 75 éves korig a SIPP +25%-os állami adójóváírása hajtja a növekedést, 75 évesen a vagyon 25%-a adómentesen átkerül egy Stocks & Shares ISA-ba, a maradék 75%-ot pedig a kihasználatlan személyi adómentes kerettel (havi £747.50-ig) adómentesen átöntjük az ISA-ba. Ez a módszer maximalizálja az unokáknak vagy a családnak szánt örökséget.")
