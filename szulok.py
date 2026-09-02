@@ -107,7 +107,10 @@ cross_month_index = ins_months
 lump_sum_moved = False
 months_to_75 = max(0, int((75 - current_age) * 12))
 
-# Szimuláció futtatása
+# Kiszámoljuk pontosan azt az egyetlen hónapindexet, amikor a nagy tőkekivonás történik
+target_lump_sum_month = int((lump_sum_age - current_age) * 12) if enable_lump_sum else -1
+
+# Havi szimuláció futtatása a háttérben
 for m in range(ins_months + 1):
     age_at_m = current_age + (m / 12)
     ins_ages.append(age_at_m)
@@ -163,27 +166,27 @@ for m in range(ins_months + 1):
                 
             sim_isa_balance = sim_isa_balance * (1 + monthly_rate) + net_monthly_input + actual_drawdown
 
-    # ✨ AZ ÚJ DINAMIKUS KIFIZETÉSEK LEVONÁSA (Biztonságosan a háttérben, 57 év felett)
-    if age_at_m >= 57:
-        # A: Egyszeri nagyobb tőkekivonás (Hónap-pontossággal mérve)
-        if enable_lump_sum and (abs(age_at_m - lump_sum_age) < (1/24)):
-            if sim_isa_balance >= lump_sum_amount:
-                sim_isa_balance -= lump_sum_amount
-            else:
-                rem_amt = lump_sum_amount - sim_isa_balance
-                sim_isa_balance = 0
-                sim_sipp_balance = max(0.0, sim_sipp_balance - rem_amt)
-                
-        # B: Havi rendszeres járadékkivonás
-        if enable_monthly_drawdown and (age_at_m >= drawdown_start_age):
-            if sim_isa_balance >= monthly_drawdown_payout:
-                sim_isa_balance -= monthly_drawdown_payout
-            else:
-                rem_drawdown = monthly_drawdown_payout - sim_isa_balance
-                sim_isa_balance = 0
-                sim_sipp_balance = max(0.0, sim_sipp_balance - rem_drawdown)
+        # 🛑 AZ ÚJ DINAMIKUS KIFIZETÉSEK INTEGÁLÁSA (Kizárólag 57 év felett fut le biztonságosan)
+        if age_at_m >= 57:
+            # A: Egyszeri nagyobb tőkekivonás (Hónap-pontossággal mérve, garantáltan egyszer fut le!)
+            if enable_lump_sum and (m == target_lump_sum_month):
+                if sim_isa_balance >= lump_sum_amount:
+                    sim_isa_balance -= lump_sum_amount
+                else:
+                    rem_amt = lump_sum_amount - sim_isa_balance
+                    sim_isa_balance = 0
+                    sim_sipp_balance = max(0.0, sim_sipp_balance - rem_amt)
+                    
+            # B: Havi rendszeres járadékkivonás
+            if enable_monthly_drawdown and (age_at_m >= drawdown_start_age):
+                if sim_isa_balance >= monthly_drawdown_payout:
+                    sim_isa_balance -= monthly_drawdown_payout
+                else:
+                    rem_drawdown = monthly_drawdown_payout - sim_isa_balance
+                    sim_isa_balance = 0
+                    sim_sipp_balance = max(0.0, sim_sipp_balance - rem_drawdown)
 
-    # Elmentjük az aktuális kombinált vagyont
+    # Elmentjük az aktuális kombinált vagyont (Már a levonások után!)
     current_combined_wealth = sim_sipp_balance + sim_isa_balance
     hybrid_wealth_trajectory.append(current_combined_wealth)
     
@@ -203,11 +206,8 @@ cross_months = total_months_to_cross % 12
 
 # EXTRA KPI KIJELZŐK CÉGVEZETŐKNEK
 if user_mode == "Céges igazgató / Vállalkozó":
-    total_corporate_pension_paid = monthly_director_corporate * min(working_months, max(0, int((75-current_age)*12)))
+    total_corporate_pension_paid = monthly_director_corporate * working_months
     corporation_tax_saved = total_corporate_pension_paid * 0.25
     
     col_dir1, col_dir2 = st.columns(2)
     col_dir1.success(f"💰 **A céged által megspórolt Társasági adó (Corporation Tax):** £{corporation_tax_saved:,.2f}")
-    col_dir2.info(f"📈 **Összes céges pénz, amit adómentesen kimentettél:** £{total_corporate_pension_paid:,.2f}")
-else:
-    col1, col2 = st.columns(2)
