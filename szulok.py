@@ -22,7 +22,7 @@ current_age = st.sidebar.slider("Jelenlegi életkor", 18, 90, 43 if user_mode ==
 working_years = st.sidebar.slider("Hány évig működik még a munka / a cég?", 0, 60, 14 if user_mode == "Céges igazgató / Vállalkozó" else 2)
 target_age = 100 # Fixen 100 éves korig követjük az életutat az örökség és élethossz miatt
 
-# 💵 EGYSZERI NAGYOBB ÖSSZEG KIVÉTELE (LUMP SUM)
+# 💵 ÚJ: EGYSZERI NAGYOBB ÖSSZEG KIVÉTELE (LUMP SUM)
 st.sidebar.markdown("---")
 st.sidebar.header("🔓 Rugalmas Nyugdíj Kifizetés")
 enable_lump_sum = st.sidebar.checkbox("Szeretnék egyszeri nagyobb összeget kivenni", value=False)
@@ -73,12 +73,10 @@ nominal_return = st.sidebar.slider("Várható éves piaci hozam (%)", 1.0, 12.0,
 inflation_rate = st.sidebar.slider("Várható éves infláció (%)", 0.0, 8.0, 2.5)
 
 st.sidebar.markdown("---")
-# 🚀 AZ ÚJ EXECUTE GOMB AZ OLDALSÁV ALJÁN
+# 🚀 EXECUTE GOMB AZ OLDALSÁV ALJÁN A STABILITÁSÉRT
 run_simulation = st.sidebar.button("🚀 SZIMULÁCIÓ INDÍTÁSA", type="primary", use_container_width=True)
 
-# CSAK AKKOR FUT LE ÉS JELENIK MEG A GRAFIKON, HA MEGNYOMTÁK A GOMBOT
 if run_simulation:
-
     # Matematikai reálhozam számítás
     annual_real_return = ((1 + (nominal_return / 100)) / (1 + (inflation_rate / 100))) - 1
     monthly_rate = (1 + annual_real_return) ** (1/12) - 1
@@ -129,7 +127,7 @@ if run_simulation:
         if m > 0:
             running_insurance_paid += 80 
             
-            # --- Felhasználó által beállított egyszeri nagy összegű kivonás ---
+            # --- EGYSZERI NAGYOBB ÖSSZEGŰ KIVONÁS ---
             if enable_lump_sum and age_at_m >= lump_sum_age and not user_lump_sum_extracted:
                 if sim_sipp_balance >= lump_sum_amount:
                     sim_sipp_balance -= lump_sum_amount
@@ -188,7 +186,7 @@ if run_simulation:
     cross_years = max(0, total_months_to_cross // 12)
     cross_months = max(0, total_months_to_cross % 12)
 
-    # EXTRA KPI KIJELZŐK CÉGVEZETŐKNEK
+    # EXTRA KPI KIJELZŐK
     if user_mode == "Céges igazgató / Vállalkozó":
         total_corporate_pension_paid = monthly_director_corporate * working_months
         corporation_tax_saved = total_corporate_pension_paid * 0.25
@@ -206,8 +204,11 @@ if run_simulation:
 
     st.markdown("---")
 
-    df_szulok = pd.DataFrame({
+    # Adatok táblázatba rendezése a grafikonhoz
+    data_dict = {
         "Életkor": ins_ages,
         "Biztosítónak befizetett tagdíj (£80/hó)": ins_total_paid,
         "Biztosítási kifizetés (Fix £30,000 névleges)": ins_payout_nominal,
         "A £30,000 VALÓDI vásárlóértéke (Zöld vonal)": ins_payout_real,
+        "ADÓOPTIMALIZÁLT HIBRID STRATÉGIA (Arany vonal)": hybrid_wealth_trajectory
+    }
