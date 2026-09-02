@@ -9,7 +9,7 @@ st.set_page_config(page_title="Komplex UK Nyugdíj & Kifizetés Tervező", layou
 st.title("🇬🇧 UK Nyugdíj, Örökség & Dinamikus Kifizetés Szimulátor")
 st.write("Modellezd a vagyon felépítését, majd tervezd meg a kifizetéseket (házvásárlás, havi járadék) 57 éves kor felett.")
 
-# 🎛️ Felhasználói Profil kiválasztása
+# Felhasználói Profil kiválasztása
 st.sidebar.markdown("## ⚙️ Felhasználói Profil")
 user_mode = st.sidebar.radio(
     "Válaszd ki a státuszodat:",
@@ -46,7 +46,6 @@ else:
     drawdown_start_age = 999
     monthly_drawdown_payout = 0
 
-
 # VÁLTOZÓK INICIALIZÁLÁSA MÓDOK SZERINT
 st.sidebar.markdown("---")
 monthly_wpp = 0
@@ -59,12 +58,12 @@ if user_mode == "Sima alkalmazott (Szülők mintája)":
     initial_balance = st.sidebar.number_input("Jelenlegi Aviva egyenleg (£)", value=0)
     gross_salary = st.sidebar.number_input("Havi bruttó fizetés (£)", value=950)
     ee_pct = st.sidebar.slider("Saját hozzájárulás (%)", 0, 20, 4)
-    er_pct = st.sidebar.slider("Munkáltatói hozzájárulás (%)", 0, 20, 4)
+    get_er_pct = st.sidebar.slider("Munkáltatói hozzájárulás (%)", 0, 20, 4)
     
     st.sidebar.header("🏹 Vanguard SIPP megtakarítás")
     net_monthly_input = st.sidebar.number_input("Havi tiszta megtakarítás a zsebből (£)", value=80)
     
-    monthly_wpp = gross_salary * ((ee_pct + er_pct) / 100)
+    monthly_wpp = gross_salary * ((ee_pct + get_er_pct) / 100)
     sipp_monthly_gross = net_monthly_input * 1.25
     monthly_user_out_of_pocket = (gross_salary * (ee_pct / 100)) + net_monthly_input
 
@@ -108,7 +107,7 @@ exact_cross_age = None
 gold_cross_age = None
 cross_month_index = ins_months
 lump_sum_moved = False
-months_to_75 = max(0, int((75 - current_age) * 12))
+max_tax_free_drawdown = 747.50
 
 # Fő havi életút szimuláció
 for m in range(ins_months + 1):
@@ -121,7 +120,6 @@ for m in range(ins_months + 1):
     
     ins_total_paid.append(running_insurance_paid)
     
-    # Kiszámoljuk az aktuális kombinált egyenleget a kifizetések levonása ELŐTT
     current_combined_wealth = sim_sipp_balance + sim_isa_balance
     hybrid_wealth_trajectory.append(current_combined_wealth)
     
@@ -163,22 +161,19 @@ for m in range(ins_months + 1):
             sim_sipp_balance = sim_sipp_balance * (1 + monthly_rate)
             sim_isa_balance = sim_isa_balance * (1 + monthly_rate) + net_monthly_input
 
-        # 🛑 AZ ÚJ DINAMIKUS KIFIZETÉSI MOTOR (Kizárólag 57 év felett aktiválódik)
+        # AZ ÚJ DINAMIKUS KIFIZETÉSI MOTOR (Kizárólag 57 év felett)
         if age_at_m >= 57:
-            # A: EGYSZERI NAGY KIVÉTEL SZIMULÁLÁSA (hónap pontossággal)
+            # A: EGYSZERI NAGY KIVÉTEL
             if abs(age_at_m - lump_sum_age) < (1/24):
-                # Megpróbáljuk először az ISA-ból kivenni (mert az teljesen adómentes), ha nem elég, a SIPP-ből
                 if sim_isa_balance >= lump_sum_amount:
                     sim_isa_balance -= lump_sum_amount
                 else:
                     rem_amount = lump_sum_amount - sim_isa_balance
                     sim_isa_balance = 0
                     sim_sipp_balance = max(0, sim_sipp_balance - rem_amount)
-                st.toast(f"ℹ️ Egyszeri £{lump_sum_amount:,.0f} kifizetés végrehajtva {lump_sum_age} éves korban!")
 
-            # B: RENDSZERES HAVI JÁRADÉK LEVONÁSA
+            # B: RENDSZERES HAVI JÁRADÉK
             if age_at_m >= drawdown_start_age:
-                # Először az ISA-ból költünk, ha elfogy, a SIPP-ből vonunk le
                 if sim_isa_balance >= monthly_drawdown_payout:
                     sim_isa_balance -= monthly_drawdown_payout
                 else:
@@ -195,7 +190,7 @@ cross_months = total_months_to_cross % 12
 
 # Felső információs sávok
 if user_mode == "Céges igazgató / Vállalkozó":
-    total_corporate_pension_paid = monthly_director_corporate * working_months
+    total_corporate_pension_paid = monthly_director_corporate * min(working_months, int((75-current_age)*12))
     corporation_tax_saved = total_corporate_pension_paid * 0.25
     col_dir1, col_dir2 = st.columns(2)
     col_dir1.success(f"💰 **A céged által megspórolt Társasági adó (Corporation Tax):** £{corporation_tax_saved:,.2f}")
@@ -208,8 +203,15 @@ else:
 
 st.markdown("---")
 
-# DataFrame generálása
+# TŰPONTOSAN JAVÍTVA A DICTIONARY ÉS DATAFRAME SZINTAXIS!
 df_szulok = pd.DataFrame({
     "Életkor": ins_ages,
     "Biztosítónak befizetett tagdíj (£80/hó)": ins_total_paid,
     "Biztosítási kifizetés (Fix £30,000 névleges)": ins_payout_nominal,
+    "A £30,000 VALÓDI vásárlóértéke (Zöld vonal)": ins_payout_real,
+    "ADÓOPTIMALIZÁLT HIBRID STRATÉGIA (Arany vonal)": hybrid_wealth_trajectory
+})
+
+# Grafikon kirajzolása
+fig = go.Figure()
+fig.add_trace(go.Scatter(x=df_szulok["Életkor"], y=df_szulok["Biztosítónak befizetett tagdíj (£80/hó)"], mode='lines', name='Biztosítónak befizetett pénz (Piros)', line=dict(color='red', width=2.5)))
