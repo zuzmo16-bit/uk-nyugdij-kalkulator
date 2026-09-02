@@ -9,7 +9,7 @@ st.set_page_config(page_title="Univerzális UK Örökség & Nyugdíj Tervező", 
 st.title("🇬🇧 Komplett UK Nyugdíj, Örökség & Vállalkozói Adóoptimalizáló")
 st.write("Ez a kombinált szimulátor alkalmas a magánszemélyek (alkalmazottak) és a saját Limited Company-val rendelkező igazgatók stratégiáinak modellezésére is.")
 
-# 🎛️ Felhasználói Profil kiválasztása
+# 🎛️ STRATÉGIA KIVÁLASZTÁSA A TETEJÉN
 st.sidebar.markdown("## ⚙️ Felhasználói Profil")
 user_mode = st.sidebar.radio(
     "Válaszd ki a státuszodat:",
@@ -22,26 +22,29 @@ current_age = st.sidebar.slider("Jelenlegi életkor", 18, 90, 43 if user_mode ==
 working_years = st.sidebar.slider("Hány évig működik még a munka / a cég?", 0, 60, 14 if user_mode == "Céges igazgató / Vállalkozó" else 2)
 target_age = 100 # Fixen 100 éves korig követjük az életutat az örökség és élethossz miatt
 
-# ✨ ÚJ: 57 ÉV FELETTI KIFIZETÉSI BEÁLLÍTÁSOK AZ OLDALSÁVBAN
-pension_access_age = max(57, current_age)
+# 💰 ÚJ: RUGALMAS KIFIZETÉSI BEÁLLÍTÁSOK (MINIMUM 57 ÉVES KORTÓL)
 st.sidebar.markdown("---")
-st.sidebar.header("💰 57 év feletti Kifizetési Beállítások")
+st.sidebar.header("🔓 Rugalmas Nyugdíj Kifizetések")
 
-enable_lump_sum = st.sidebar.checkbox("Egyszeri nagyobb összeg kivétele (pl. Házra)", value=True if user_mode == "Sima alkalmazott (Szülők mintája)" else False)
+# 1. Egyszeri nagyobb kivétel (Lump Sum)
+st.sidebar.subheader("💵 Egyszeri nagyobb összeg kivétele")
+enable_lump_sum = st.sidebar.checkbox("Szeretnék egyszeri nagyobb összeget kivenni", value=False)
 if enable_lump_sum:
-    lump_sum_age = st.sidebar.slider("Hány évesen történjen az egyszeri kivétel?", int(pension_access_age), 95, 68 if user_mode == "Sima alkalmazott (Szülők mintája)" else 60)
-    lump_sum_amount = st.sidebar.number_input("Kivenni kívánt egyszeri összeg (£)", value=24000 if user_mode == "Sima alkalmazott (Szülők mintája)" else 50000)
+    lump_sum_age = st.sidebar.slider("Kivétel életkora (év)", max(57, int(np.ceil(current_age))), 99, 60)
+    lump_sum_amount = st.sidebar.number_input("Kivenni kívánt egyszeri összeg (£)", value=10000, step=5000)
 else:
     lump_sum_age = 999
     lump_sum_amount = 0
 
-enable_monthly_drawdown = st.sidebar.checkbox("Rendszeres havi járadékfizetés indítása", value=True if user_mode == "Sima alkalmazott (Szülők mintája)" else False)
+# 2. Havi rendszeres kivétel (Drawdown)
+st.sidebar.subheader("💶 Rendszeres havi járadék")
+enable_monthly_drawdown = st.sidebar.checkbox("Szeretnék rendszeres havi járadékot kivenni", value=False)
 if enable_monthly_drawdown:
-    drawdown_start_age = st.sidebar.slider("Hány éves kortól induljon a havi járadék?", int(pension_access_age), 95, 75 if user_mode == "Sima alkalmazott (Szülők mintája)" else 57)
-    monthly_drawdown_payout = st.sidebar.number_input("Havi rendszeres kifizetés nagysága (£)", value=747 if user_mode == "Sima alkalmazott (Szülők mintája)" else 1500)
+    drawdown_start_age = st.sidebar.slider("Járadék kezdő életkora (év)", max(57, int(np.ceil(current_age))), 99, 67)
+    monthly_drawdown_amount = st.sidebar.number_input("Havi rendszeres kivétel összege (£/hó)", value=500, step=50)
 else:
     drawdown_start_age = 999
-    monthly_drawdown_payout = 0
+    monthly_drawdown_amount = 0
 
 
 # VÁLTOZÓK INICIALIZÁLÁSA MÓDOK SZERINT
@@ -86,7 +89,7 @@ annual_real_return = ((1 + (nominal_return / 100)) / (1 + (inflation_rate / 100)
 monthly_rate = (1 + annual_real_return) ** (1/12) - 1
 
 # Alapértékek előkészítése
-ins_months = int((target_age - current_age) * 12)
+ins_months = (target_age - current_age) * 12
 working_months = working_years * 12
 max_tax_free_drawdown = 747.50
 
@@ -105,10 +108,7 @@ exact_cross_age = None
 gold_cross_age = None
 cross_month_index = ins_months
 lump_sum_moved = False
-months_to_75 = max(0, int((75 - current_age) * 12))
-
-# Kiszámoljuk pontosan azt az egyetlen hónapindexet, amikor a nagy tőkekivonás történik
-target_lump_sum_month = int((lump_sum_age - current_age) * 12) if enable_lump_sum else -1
+user_lump_sum_extracted = False # Új flag az egyéni egyszeri kivételhez
 
 # Havi szimuláció futtatása a háttérben
 for m in range(ins_months + 1):
@@ -121,9 +121,30 @@ for m in range(ins_months + 1):
     
     ins_total_paid.append(running_insurance_paid)
     
+    current_combined_wealth = sim_sipp_balance + sim_isa_balance
+    hybrid_wealth_trajectory.append(current_combined_wealth)
+    
+    if exact_cross_age is None and running_insurance_paid >= real_payout:
+        exact_cross_age = age_at_m
+        cross_month_index = m
+        
+    if gold_cross_age is None and m > 0 and current_combined_wealth >= real_payout:
+        gold_cross_age = age_at_m
+        
     if m > 0:
         running_insurance_paid += 80 
         
+        # --- ÚJ FUNKCIÓ: Felhasználó által beállított egyszeri nagy összegű kivonás ---
+        if enable_lump_sum and age_at_m >= lump_sum_age and not user_lump_sum_extracted:
+            # Csökkentjük az egyenleget (elsődlegesen a SIPP-ből, ha elfogy, az ISA-ból)
+            if sim_sipp_balance >= lump_sum_amount:
+                sim_sipp_balance -= lump_sum_amount
+            else:
+                rem = lump_sum_amount - sim_sipp_balance
+                sim_sipp_balance = 0
+                sim_isa_balance = max(0, sim_isa_balance - rem)
+            user_lump_sum_extracted = True
+
         # --- 1. FÁZIS: 75 ÉVES KORIG ---
         if age_at_m <= 75:
             if m <= working_months:
@@ -137,6 +158,13 @@ for m in range(ins_months + 1):
                 else:
                     sim_sipp_balance = sim_sipp_balance * (1 + monthly_rate)
             sim_isa_balance = 0
+            
+            # ÚJ: Rendszeres havi járadék levonása 75 év alatt is (ha az életkor elérte a beállítottat)
+            if enable_monthly_drawdown and age_at_m >= drawdown_start_age:
+                if sim_sipp_balance >= monthly_down_amount := monthly_drawdown_amount:
+                    sim_sipp_balance -= monthly_down_amount
+                else:
+                    sim_sipp_balance = 0
             
         # --- MELLÉKFÁZIS: PONTOSAN 75 ÉVES KORBAN ---
         elif age_at_m > 75 and not lump_sum_moved:
@@ -154,6 +182,13 @@ for m in range(ins_months + 1):
                 sim_sipp_balance = 0
             sim_isa_balance = sim_isa_balance * (1 + monthly_rate) + net_monthly_input + actual_drawdown
             
+            # ÚJ: Rendszeres havi járadék levonása a kombinált vagyonból
+            if enable_monthly_drawdown and age_at_m >= drawdown_start_age:
+                if sim_isa_balance >= monthly_drawdown_amount:
+                    sim_isa_balance -= monthly_drawdown_amount
+                else:
+                    sim_isa_balance = 0
+
         # --- 2. FÁZIS: 75 ÉV FELETT ---
         else:
             sim_sipp_balance = sim_sipp_balance * (1 + monthly_rate)
@@ -166,36 +201,12 @@ for m in range(ins_months + 1):
                 
             sim_isa_balance = sim_isa_balance * (1 + monthly_rate) + net_monthly_input + actual_drawdown
 
-        # 🛑 AZ ÚJ DINAMIKUS KIFIZETÉSEK INTEGÁLÁSA (Kizárólag 57 év felett fut le biztonságosan)
-        if age_at_m >= 57:
-            # A: Egyszeri nagyobb tőkekivonás (Hónap-pontossággal mérve, garantáltan egyszer fut le!)
-            if enable_lump_sum and (m == target_lump_sum_month):
-                if sim_isa_balance >= lump_sum_amount:
-                    sim_isa_balance -= lump_sum_amount
+            # ÚJ: Rendszeres havi járadék levonása 75 év felett az ISA egyenlegből
+            if enable_monthly_drawdown and age_at_m >= drawdown_start_age:
+                if sim_isa_balance >= monthly_drawdown_amount:
+                    sim_isa_balance -= monthly_drawdown_amount
                 else:
-                    rem_amt = lump_sum_amount - sim_isa_balance
                     sim_isa_balance = 0
-                    sim_sipp_balance = max(0.0, sim_sipp_balance - rem_amt)
-                    
-            # B: Havi rendszeres járadékkivonás
-            if enable_monthly_drawdown and (age_at_m >= drawdown_start_age):
-                if sim_isa_balance >= monthly_drawdown_payout:
-                    sim_isa_balance -= monthly_drawdown_payout
-                else:
-                    rem_drawdown = monthly_drawdown_payout - sim_isa_balance
-                    sim_isa_balance = 0
-                    sim_sipp_balance = max(0.0, sim_sipp_balance - rem_drawdown)
-
-    # Elmentjük az aktuális kombinált vagyont (Már a levonások után!)
-    current_combined_wealth = sim_sipp_balance + sim_isa_balance
-    hybrid_wealth_trajectory.append(current_combined_wealth)
-    
-    if exact_cross_age is None and running_insurance_paid >= real_payout:
-        exact_cross_age = age_at_m
-        cross_month_index = m
-        
-    if gold_cross_age is None and m > 0 and current_combined_wealth >= real_payout:
-        gold_cross_age = age_at_m
 
 if exact_cross_age is None:
     exact_cross_age = 100
@@ -209,5 +220,3 @@ if user_mode == "Céges igazgató / Vállalkozó":
     total_corporate_pension_paid = monthly_director_corporate * working_months
     corporation_tax_saved = total_corporate_pension_paid * 0.25
     
-    col_dir1, col_dir2 = st.columns(2)
-    col_dir1.success(f"💰 **A céged által megspórolt Társasági adó (Corporation Tax):** £{corporation_tax_saved:,.2f}")
