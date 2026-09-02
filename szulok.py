@@ -20,7 +20,7 @@ st.sidebar.markdown("---")
 st.sidebar.header("📌 Életkor és Időtáv")
 current_age = st.sidebar.slider("Jelenlegi életkor", 18, 90, 43 if user_mode == "Céges igazgató / Vállalkozó" else 66)
 working_years = st.sidebar.slider("Hány évig működik még a munka / a cég?", 0, 60, 14 if user_mode == "Céges igazgató / Vállalkozó" else 2)
-target_age = 100 # Fixen 100 éves korig modellezünk
+target_age = 100 
 
 # Kifizetési fázis korlát meghatározása (Minimum 57 év a brit szabályok szerint)
 pension_access_age = max(57, current_age)
@@ -123,9 +123,9 @@ for m in range(ins_months + 1):
     
     ins_total_paid.append(running_insurance_paid)
     
-    # 🛑 JAVÍTOTT DINAMIKUS KIFIZETÉSI MOTOR (A levonások a kamatszámítás ELŐTT történnek a pontos egyenlegért)
+    # DINAMIKUS KIFIZETÉSI MOTOR
     if m > 0 and age_at_m >= 57:
-        # A: EGYSZERI NAGY KIVÉTEL (Hónap-index alapján, garantáltan csak EGYSZER fut le!)
+        # A: Egyszeri nagy kivétel
         if enable_lump_sum and (m == target_lump_sum_month):
             if sim_isa_balance >= lump_sum_amount:
                 sim_isa_balance -= lump_sum_amount
@@ -134,7 +134,7 @@ for m in range(ins_months + 1):
                 sim_isa_balance = 0
                 sim_sipp_balance = max(0.0, sim_sipp_balance - rem_amount)
 
-        # B: RENDSZERES HAVI JÁRADÉK (Csak a kijelölt életkor elérése után havonta egyszer)
+        # B: Rendszeres havi járadék
         if enable_monthly_drawdown and (age_at_m >= drawdown_start_age):
             if sim_isa_balance >= monthly_drawdown_payout:
                 sim_isa_balance -= monthly_drawdown_payout
@@ -143,7 +143,7 @@ for m in range(ins_months + 1):
                 sim_isa_balance = 0
                 sim_sipp_balance = max(0.0, sim_sipp_balance - rem_drawdown)
 
-    # Elmentjük az aktuális kombinált vagyont a grafikonhoz
+    # Elmentjük az aktuális kombinált vagyont
     current_combined_wealth = sim_sipp_balance + sim_isa_balance
     hybrid_wealth_trajectory.append(current_combined_wealth)
     
@@ -157,7 +157,7 @@ for m in range(ins_months + 1):
     if m > 0:
         running_insurance_paid += 80 
         
-        # --- ALAPVETŐ VAGYONÉPÍTÉSI LOGIKA (75 ÉVES KORIG) ---
+        # --- ALAPVETŐ VAGYONÉPÍTÉSI LOGIKA ---
         if age_at_m <= 75:
             if m <= working_months:
                 if user_mode == "Sima alkalmazott (Szülők mintája)":
@@ -170,7 +170,7 @@ for m in range(ins_months + 1):
                 else:
                     sim_sipp_balance = sim_sipp_balance * (1 + monthly_rate)
             
-        # --- MELLÉKFÁZIS: PONTOSAN 75 ÉVES KORBAN (A 25% gépátvitel) ---
+        # --- MELLÉKFÁZIS: PONTOSAN 75 ÉVES KORBAN ---
         elif age_at_m > 75 and not lump_sum_moved:
             lump_sum_25 = sim_sipp_balance * 0.25
             sim_sipp_balance = sim_sipp_balance * 0.75
@@ -207,8 +207,13 @@ else:
 
 st.markdown("---")
 
-# Biztonságos DataFrame összeállítás
-df_szulok = pd.DataFrame({
-    "Életkor": ins_ages,
-    "Biztosítónak befizetett tagdíj (£80/hó)": ins_total_paid,
-    "Biztosítási kifizetés (Fix £30,000 névleges)": ins_payout_nominal,
+# 🔒 BOMBABIZTOS, ÚJ DATAFRAME LÉTREHOZÁS KAPCSOS ZÁRÓJELEK NÉLKÜL!
+df_szulok = pd.DataFrame()
+df_szulok["Életkor"] = ins_ages
+df_szulok["Biztosítónak befizetett tagdíj (£80/hó)"] = ins_total_paid
+df_szulok["Biztosítási kifizetés (Fix £30,000 névleges)"] = ins_payout_nominal
+df_szulok["A £30,000 VALÓDI vásárlóértéke (Zöld vonal)"] = ins_payout_real
+df_szulok["ADÓOPTIMALIZÁLT HIBRID STRATÉGIA (Arany vonal)"] = hybrid_wealth_trajectory
+
+# Grafikon kirajzolása
+fig = go.Figure()
