@@ -46,7 +46,7 @@ if user_mode == "Sima alkalmazott (Szülők mintája)":
     initial_balance = st.sidebar.number_input("Jelenlegi Aviva egyenleg (£)", value=0)
     gross_salary = st.sidebar.number_input("Havi bruttó fizetés (£)", value=950)
     ee_pct = st.sidebar.slider("Saját hozzájárulás (%)", 0, 20, 4)
-    er_pct = st.sidebar.slider("Munkáltatói hozzájralás (%)", 0, 20, 4)
+    er_pct = st.sidebar.slider("Munkáltatói hozzárulás (%)", 0, 20, 4)
     
     st.sidebar.header("🏹 Vanguard SIPP megtakarítás")
     net_monthly_input = st.sidebar.number_input("Havi tiszta megtakarítás a zsebből (£)", value=80)
@@ -178,8 +178,8 @@ if exact_cross_age is None:
     exact_cross_age = 100
 
 total_months_to_cross = int((exact_cross_age - current_age) * 12)
-cross_years = total_months_to_cross // 12
-cross_months = total_months_to_cross % 12
+cross_years = max(0, total_months_to_cross // 12)
+cross_months = max(0, total_months_to_cross % 12)
 
 # EXTRA KPI KIJELZŐK CÉGVEZETŐKNEK
 if user_mode == "Céges igazgató / Vállalkozó":
@@ -192,7 +192,10 @@ if user_mode == "Céges igazgató / Vállalkozó":
 else:
     col1, col2 = st.columns(2)
     col1.error(f"⚠️ **Valódi (vásárlóértékű) Veszteségpont:** {exact_cross_age:.1f} évesen (pontosan {cross_years} év és {cross_months} hónap múlva) több pénzt fizetnek be zsebből, mint a biztosítás!")
-    hybrid_at_cross = hybrid_wealth_trajectory[cross_month_index]
+    
+    # Biztonsági ellenőrzés a tömb indexelésére a felhő miatt
+    idx = min(max(0, cross_month_index), len(hybrid_wealth_trajectory) - 1)
+    hybrid_at_cross = hybrid_wealth_trajectory[idx] if hybrid_wealth_trajectory else 0
     col2.success(f"💰 **Ugyanekkor a Hibrid (SIPP+ISA) vagyon összege:** £{hybrid_at_cross:,.2f} (Mai reálértéken!)")
 
 st.markdown("---")
@@ -209,4 +212,3 @@ df_szulok = pd.DataFrame({
 fig = go.Figure()
 fig.add_trace(go.Scatter(x=df_szulok["Életkor"], y=df_szulok["Biztosítónak befizetett tagdíj (£80/hó)"], mode='lines', name='Biztosítónak befizetett pénz (Piros)', line=dict(color='red', width=2.5)))
 fig.add_trace(go.Scatter(x=df_szulok["Életkor"], y=df_szulok["Biztosítási kifizetés (Fix £30,000 névleges)"], mode='lines', name='Garantált kifizetés (Sárga - Fix £30k)', line=dict(color='yellow', dash='dash')))
-fig.add_trace(go.Scatter(x=df_szulok["Életkor"], y=df_szulok["A £30,000 VALÓDI vásárlóértéke (Zöld vonal)"], mode='lines', name='A £30k igazi értéke az infláció után (Zöld)', line=dict(color='#00CC96', width=2.5)))
