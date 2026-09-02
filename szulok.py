@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
 
 # Oldal konfiguráció
 st.set_page_config(page_title="Univerzális UK Örökség & Nyugdíj Tervező", layout="wide", page_icon="🇬🇧")
@@ -22,7 +21,7 @@ current_age = st.sidebar.slider("Jelenlegi életkor", 18, 90, 43 if user_mode ==
 working_years = st.sidebar.slider("Hány évig működik még a munka / a cég?", 0, 60, 14 if user_mode == "Céges igazgató / Vállalkozó" else 2)
 target_age = 100 # Fixen 100 éves korig követjük az életutat az örökség és élethossz miatt
 
-# 💵 ÚJ: EGYSZERI NAGYOBB ÖSSZEG KIVÉTELE (LUMP SUM)
+# 💵 EGYSZERI NAGYOBB ÖSSZEG KIVÉTELE (LUMP SUM)
 st.sidebar.markdown("---")
 st.sidebar.header("🔓 Rugalmas Nyugdíj Kifizetés")
 enable_lump_sum = st.sidebar.checkbox("Szeretnék egyszeri nagyobb összeget kivenni", value=False)
@@ -204,11 +203,15 @@ if run_simulation:
 
     st.markdown("---")
 
-    # Adatok táblázatba rendezése a grafikonhoz
-    data_dict = {
+    # Adatok előkészítése a beépített grafikonhoz
+    df_szulok = pd.DataFrame({
         "Életkor": ins_ages,
-        "Biztosítónak befizetett tagdíj (£80/hó)": ins_total_paid,
-        "Biztosítási kifizetés (Fix £30,000 névleges)": ins_payout_nominal,
-        "A £30,000 VALÓDI vásárlóértéke (Zöld vonal)": ins_payout_real,
-        "ADÓOPTIMALIZÁLT HIBRID STRATÉGIA (Arany vonal)": hybrid_wealth_trajectory
-    }
+        "Biztosítóhoz befizetve": ins_total_paid,
+        "Fix £30k kifizetés": ins_payout_nominal,
+        "£30k reálértéke infláció után": ins_payout_real,
+        "Hibrid vagyon (Arany vonal)": hybrid_wealth_trajectory
+    })
+
+    # Az életkort beállítjuk X tengelynek
+    df_chart = df_szulok.set_index("Életkor")
+
