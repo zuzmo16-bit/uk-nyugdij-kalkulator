@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="Univerzális UK Örökség & Nyugdíj Tervező", layout="wide", page_icon="🇬🇧")
 
 st.title("🇬🇧 Komplett UK Nyugdíj, Örökség & Vállalkozói Adóoptimalizáló")
-st.write("Ez a kombinált szimulátor alkalmas a magánszemélyek (alkalmazottak) és a saját Limited Company-val rendelkező igazgatók stratégiáinak modellezésére is.")
+st.write("Ez a kombinált szimulátor alkalmas a magánszemélyek (alkalmazottak) és a saját Limited Company-val rentedkező igazgatók stratégiáinak modellezésére is.")
 
 # 🎛️ STRATÉGIA KIVÁLASZTÁSA A TETEJÉN
 st.sidebar.markdown("## ⚙️ Felhasználói Profil")
@@ -158,7 +158,7 @@ for m in range(ins_months + 1):
                     sim_sipp_balance = sim_sipp_balance * (1 + monthly_rate)
             sim_isa_balance = 0
             
-            # Rendszeres havi járadék levonása 75 év alatt (A hiba itt lett javítva)
+            # Rendszeres havi járadék levonása 75 év alatt
             if enable_monthly_drawdown and age_at_m >= drawdown_start_age:
                 if sim_sipp_balance >= monthly_drawdown_amount:
                     sim_sipp_balance -= monthly_drawdown_amount
@@ -211,8 +211,8 @@ if exact_cross_age is None:
     exact_cross_age = 100
 
 total_months_to_cross = int((exact_cross_age - current_age) * 12)
-cross_years = total_months_to_cross // 12
-cross_months = total_months_to_cross % 12
+cross_years = max(0, total_months_to_cross // 12)
+cross_months = max(0, total_months_to_cross % 12)
 
 # EXTRA KPI KIJELZŐK CÉGVEZETŐKNEK
 if user_mode == "Céges igazgató / Vállalkozó":
