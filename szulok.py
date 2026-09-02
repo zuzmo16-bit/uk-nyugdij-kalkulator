@@ -58,7 +58,7 @@ if user_mode == "Sima alkalmazott (Szülők mintája)":
     initial_balance = st.sidebar.number_input("Jelenlegi Aviva egyenleg (£)", value=0)
     gross_salary = st.sidebar.number_input("Havi bruttó fizetés (£)", value=950)
     ee_pct = st.sidebar.slider("Saját hozzájárulás (%)", 0, 20, 4)
-    get_er_pct = st.sidebar.slider("Munkáltatói hozzájralás (%)", 0, 20, 4)
+    get_er_pct = st.sidebar.slider("Munkáltatói hozzájárulás (%)", 0, 20, 4)
     
     st.sidebar.header("🏹 Vanguard SIPP megtakarítás")
     net_monthly_input = st.sidebar.number_input("Havi tiszta megtakarítás a zsebből (£)", value=80)
@@ -108,7 +108,9 @@ gold_cross_age = None
 cross_month_index = ins_months
 lump_sum_moved = False
 max_tax_free_drawdown = 747.50
-lump_sum_executed = False  # Új biztonsági flag a végtelen levonás ellen!
+
+# Kiszámoljuk pontosan azt az egyetlen hónapindexet, amikor a nagy tőkekivonás történik
+target_lump_sum_month = int((lump_sum_age - current_age) * 12) if enable_lump_sum else -1
 
 # Fő havi életút szimuláció
 for m in range(ins_months + 1):
@@ -121,6 +123,27 @@ for m in range(ins_months + 1):
     
     ins_total_paid.append(running_insurance_paid)
     
+    # 🛑 JAVÍTOTT DINAMIKUS KIFIZETÉSI MOTOR (A levonások a kamatszámítás ELŐTT történnek a pontos egyenlegért)
+    if m > 0 and age_at_m >= 57:
+        # A: EGYSZERI NAGY KIVÉTEL (Hónap-index alapján, garantáltan csak EGYSZER fut le!)
+        if enable_lump_sum and (m == target_lump_sum_month):
+            if sim_isa_balance >= lump_sum_amount:
+                sim_isa_balance -= lump_sum_amount
+            else:
+                rem_amount = lump_sum_amount - sim_isa_balance
+                sim_isa_balance = 0
+                sim_sipp_balance = max(0.0, sim_sipp_balance - rem_amount)
+
+        # B: RENDSZERES HAVI JÁRADÉK (Csak a kijelölt életkor elérése után havonta egyszer)
+        if enable_monthly_drawdown and (age_at_m >= drawdown_start_age):
+            if sim_isa_balance >= monthly_drawdown_payout:
+                sim_isa_balance -= monthly_drawdown_payout
+            else:
+                rem_drawdown = monthly_drawdown_payout - sim_isa_balance
+                sim_isa_balance = 0
+                sim_sipp_balance = max(0.0, sim_sipp_balance - rem_drawdown)
+
+    # Elmentjük az aktuális kombinált vagyont a grafikonhoz
     current_combined_wealth = sim_sipp_balance + sim_isa_balance
     hybrid_wealth_trajectory.append(current_combined_wealth)
     
@@ -162,27 +185,6 @@ for m in range(ins_months + 1):
             sim_sipp_balance = sim_sipp_balance * (1 + monthly_rate)
             sim_isa_balance = sim_isa_balance * (1 + monthly_rate) + net_monthly_input
 
-        # 🛑 JAVÍTOTT DINAMIKUS KIFIZETÉSI MOTOR (Kizárólag 57 év felett)
-        if age_at_m >= 57:
-            # A: EGYSZERI NAGY KIVÉTEL (Tűpontos, egyszeri végrehajtás)
-            if enable_lump_sum and (not lump_sum_executed) and (age_at_m >= lump_sum_age):
-                if sim_isa_balance >= lump_sum_amount:
-                    sim_isa_balance -= lump_sum_amount
-                else:
-                    rem_amount = lump_sum_amount - sim_isa_balance
-                    sim_isa_balance = 0
-                    sim_sipp_balance = max(0.0, sim_sipp_balance - rem_amount)
-                lump_sum_executed = True
-
-            # B: RENDSZERES HAVI JÁRADÉK (Stabil levonás havi szinten)
-            if enable_monthly_drawdown and (age_at_m >= drawdown_start_age):
-                if sim_isa_balance >= monthly_drawdown_payout:
-                    sim_isa_balance -= monthly_drawdown_payout
-                else:
-                    rem_drawdown = monthly_drawdown_payout - sim_isa_balance
-                    sim_isa_balance = 0
-                    sim_sipp_balance = max(0.0, sim_sipp_balance - rem_drawdown)
-
 if exact_cross_age is None:
     exact_cross_age = 100
 
@@ -210,7 +212,3 @@ df_szulok = pd.DataFrame({
     "Életkor": ins_ages,
     "Biztosítónak befizetett tagdíj (£80/hó)": ins_total_paid,
     "Biztosítási kifizetés (Fix £30,000 névleges)": ins_payout_nominal,
-    "A £30,000 VALÓDI vásárlóértéke (Zöld vonal)": ins_payout_real,
-    "ADÓOPTIMALIZÁLT HIBRID STRATÉGIA (Arany vonal)": hybrid_wealth_trajectory
-})
-
