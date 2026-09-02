@@ -63,9 +63,9 @@ if user_mode == "Sima alkalmazott (Szülők mintája)":
     st.sidebar.header("🏹 Vanguard SIPP megtakarítás")
     net_monthly_input = st.sidebar.number_input("Havi tiszta megtakarítás a zsebből (£)", value=80)
     
-    monthly_wpp = gross_salary * ((ee_pct + get_er_pct) / 100)
-    sipp_monthly_gross = net_monthly_input * 1.25
-    monthly_user_out_of_pocket = (gross_salary * (ee_pct / 100)) + net_monthly_input
+    monthly_wpp = float(gross_salary * ((ee_pct + get_er_pct) / 100))
+    sipp_monthly_gross = float(net_monthly_input * 1.25)
+    monthly_user_out_of_pocket = float((gross_salary * (ee_pct / 100)) + net_monthly_input)
 
 else:
     st.sidebar.header("🏢 Igazgatói alapbeállítások")
@@ -78,7 +78,7 @@ else:
     st.sidebar.header("🏹 Vanguard Magán Megtakarítás (ISA)")
     net_monthly_input = st.sidebar.number_input("Havi tiszta MAGÁN megtakarítás a zsebedből (£)", value=0)
     
-    monthly_user_out_of_pocket = net_monthly_input
+    monthly_user_out_of_pocket = float(net_monthly_input)
 
 st.sidebar.header("📈 Piaci és Inflációs Beállítások")
 nominal_return = st.sidebar.slider("Várható éves piaci hozam (%)", 1.0, 12.0, 7.5)
@@ -99,39 +99,38 @@ ins_payout_real = []
 ins_total_paid = []
 hybrid_wealth_trajectory = []
 
-running_insurance_paid = 0
-sim_sipp_balance = initial_balance
-sim_isa_balance = 0
+running_insurance_paid = 0.0
+sim_sipp_balance = float(initial_balance)
+sim_isa_balance = 0.0
 
 exact_cross_age = None
 gold_cross_age = None
 cross_month_index = ins_months
 lump_sum_moved = False
-max_tax_free_drawdown = 747.50
 
 # Kiszámoljuk pontosan azt az egyetlen hónapindexet, amikor a nagy tőkekivonás történik
 target_lump_sum_month = int((lump_sum_age - current_age) * 12) if enable_lump_sum else -1
 
 # Fő havi életút szimuláció
 for m in range(ins_months + 1):
-    age_at_m = current_age + (m / 12)
+    age_at_m = float(current_age + (m / 12))
     ins_ages.append(age_at_m)
-    ins_payout_nominal.append(30000)
+    ins_payout_nominal.append(30000.0)
     
-    real_payout = 30000 / ((1 + (inflation_rate/100)) ** (m / 12))
+    real_payout = float(30000 / ((1 + (inflation_rate/100)) ** (m / 12)))
     ins_payout_real.append(real_payout)
     
-    ins_total_paid.append(running_insurance_paid)
+    ins_total_paid.append(float(running_insurance_paid))
     
-    # DINAMIKUS KIFIZETÉSI MOTOR
+    # 🛑 BIZTONSÁGOS KIFIZETÉSI MOTOR (A levonások után azonnal rögzítjük az értéket)
     if m > 0 and age_at_m >= 57:
-        # A: Egyszeri nagy kivétel
+        # A: Egyszeri nagy kivétel (Hónap-index alapján, garantáltan csak egyszer)
         if enable_lump_sum and (m == target_lump_sum_month):
             if sim_isa_balance >= lump_sum_amount:
                 sim_isa_balance -= lump_sum_amount
             else:
                 rem_amount = lump_sum_amount - sim_isa_balance
-                sim_isa_balance = 0
+                sim_isa_balance = 0.0
                 sim_sipp_balance = max(0.0, sim_sipp_balance - rem_amount)
 
         # B: Rendszeres havi járadék
@@ -140,11 +139,11 @@ for m in range(ins_months + 1):
                 sim_isa_balance -= monthly_drawdown_payout
             else:
                 rem_drawdown = monthly_drawdown_payout - sim_isa_balance
-                sim_isa_balance = 0
+                sim_isa_balance = 0.0
                 sim_sipp_balance = max(0.0, sim_sipp_balance - rem_drawdown)
 
-    # Elmentjük az aktuális kombinált vagyont
-    current_combined_wealth = sim_sipp_balance + sim_isa_balance
+    # Rögzítjük az egyenleget a tömbben
+    current_combined_wealth = float(sim_sipp_balance + sim_isa_balance)
     hybrid_wealth_trajectory.append(current_combined_wealth)
     
     if exact_cross_age is None and running_insurance_paid >= real_payout:
@@ -155,7 +154,7 @@ for m in range(ins_months + 1):
         gold_cross_age = age_at_m
         
     if m > 0:
-        running_insurance_paid += 80 
+        running_insurance_paid += 80.0 
         
         # --- ALAPVETŐ VAGYONÉPÍTÉSI LOGIKA ---
         if age_at_m <= 75:
@@ -186,7 +185,7 @@ for m in range(ins_months + 1):
             sim_isa_balance = sim_isa_balance * (1 + monthly_rate) + net_monthly_input
 
 if exact_cross_age is None:
-    exact_cross_age = 100
+    exact_cross_age = 100.0
 
 total_months_to_cross = int((exact_cross_age - current_age) * 12)
 cross_years = total_months_to_cross // 12
@@ -207,13 +206,9 @@ else:
 
 st.markdown("---")
 
-# 🔒 BOMBABIZTOS, ÚJ DATAFRAME LÉTREHOZÁS KAPCSOS ZÁRÓJELEK NÉLKÜL!
+# Biztonságos, garantált DataFrame felépítés (minden oszlop tiszta Python float lista)
 df_szulok = pd.DataFrame()
-df_szulok["Életkor"] = ins_ages
-df_szulok["Biztosítónak befizetett tagdíj (£80/hó)"] = ins_total_paid
-df_szulok["Biztosítási kifizetés (Fix £30,000 névleges)"] = ins_payout_nominal
-df_szulok["A £30,000 VALÓDI vásárlóértéke (Zöld vonal)"] = ins_payout_real
-df_szulok["ADÓOPTIMALIZÁLT HIBRID STRATÉGIA (Arany vonal)"] = hybrid_wealth_trajectory
-
-# Grafikon kirajzolása
-fig = go.Figure()
+df_szulok["Életkor"] = [float(x) for x in ins_ages]
+df_szulok["Biztositas_Paid"] = [float(x) for x in ins_total_paid]
+df_szulok["Biztositas_Nominal"] = [float(x) for x in ins_payout_nominal]
+df_szulok["Biztositas_Real"] = [float(x) for x in ins_payout_real]
