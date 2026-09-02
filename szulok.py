@@ -22,7 +22,7 @@ current_age = st.sidebar.slider("Jelenlegi életkor", 18, 90, 43 if user_mode ==
 working_years = st.sidebar.slider("Hány évig működik még a munka / a cég?", 0, 60, 14 if user_mode == "Céges igazgató / Vállalkozó" else 2)
 target_age = 100 # Fixen 100 éves korig követjük az életutat az örökség és élethossz miatt
 
-# 💰 ÚJ: RUGALMAS KIFIZETÉSI BEÁLLÍTÁSOK (MINIMUM 57 ÉVES KORTÓL)
+# 💰 RUGALMAS KIFIZETÉSI BEÁLLÍTÁSOK (MINIMUM 57 ÉVES KORTÓL)
 st.sidebar.markdown("---")
 st.sidebar.header("🔓 Rugalmas Nyugdíj Kifizetések")
 
@@ -108,7 +108,7 @@ exact_cross_age = None
 gold_cross_age = None
 cross_month_index = ins_months
 lump_sum_moved = False
-user_lump_sum_extracted = False # Új flag az egyéni egyszeri kivételhez
+user_lump_sum_extracted = False
 
 # Havi szimuláció futtatása a háttérben
 for m in range(ins_months + 1):
@@ -134,9 +134,8 @@ for m in range(ins_months + 1):
     if m > 0:
         running_insurance_paid += 80 
         
-        # --- ÚJ FUNKCIÓ: Felhasználó által beállított egyszeri nagy összegű kivonás ---
+        # --- Felhasználó által beállított egyszeri nagy összegű kivonás ---
         if enable_lump_sum and age_at_m >= lump_sum_age and not user_lump_sum_extracted:
-            # Csökkentjük az egyenleget (elsődlegesen a SIPP-ből, ha elfogy, az ISA-ból)
             if sim_sipp_balance >= lump_sum_amount:
                 sim_sipp_balance -= lump_sum_amount
             else:
@@ -159,10 +158,10 @@ for m in range(ins_months + 1):
                     sim_sipp_balance = sim_sipp_balance * (1 + monthly_rate)
             sim_isa_balance = 0
             
-            # ÚJ: Rendszeres havi járadék levonása 75 év alatt is (ha az életkor elérte a beállítottat)
+            # Rendszeres havi járadék levonása 75 év alatt (A hiba itt lett javítva)
             if enable_monthly_drawdown and age_at_m >= drawdown_start_age:
-                if sim_sipp_balance >= monthly_down_amount := monthly_drawdown_amount:
-                    sim_sipp_balance -= monthly_down_amount
+                if sim_sipp_balance >= monthly_drawdown_amount:
+                    sim_sipp_balance -= monthly_drawdown_amount
                 else:
                     sim_sipp_balance = 0
             
@@ -182,7 +181,7 @@ for m in range(ins_months + 1):
                 sim_sipp_balance = 0
             sim_isa_balance = sim_isa_balance * (1 + monthly_rate) + net_monthly_input + actual_drawdown
             
-            # ÚJ: Rendszeres havi járadék levonása a kombinált vagyonból
+            # Rendszeres havi járadék levonása a kombinált vagyonból
             if enable_monthly_drawdown and age_at_m >= drawdown_start_age:
                 if sim_isa_balance >= monthly_drawdown_amount:
                     sim_isa_balance -= monthly_drawdown_amount
@@ -201,7 +200,7 @@ for m in range(ins_months + 1):
                 
             sim_isa_balance = sim_isa_balance * (1 + monthly_rate) + net_monthly_input + actual_drawdown
 
-            # ÚJ: Rendszeres havi járadék levonása 75 év felett az ISA egyenlegből
+            # Rendszeres havi járadék levonása 75 év felett az ISA egyenlegből
             if enable_monthly_drawdown and age_at_m >= drawdown_start_age:
                 if sim_isa_balance >= monthly_drawdown_amount:
                     sim_isa_balance -= monthly_drawdown_amount
@@ -220,3 +219,5 @@ if user_mode == "Céges igazgató / Vállalkozó":
     total_corporate_pension_paid = monthly_director_corporate * working_months
     corporation_tax_saved = total_corporate_pension_paid * 0.25
     
+    col_dir1, col_dir2 = st.columns(2)
+    col_dir1.success(f"💰 **A céged által megspórolt Társasági adó (Corporation Tax):** £{corporation_tax_saved:,.2f}")
