@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import plotly.graph_objects as go
 
 # Oldal konfiguráció
 st.set_page_config(page_title="Univerzális UK Örökség & Nyugdíj Tervező", layout="wide", page_icon="🇬🇧")
@@ -213,12 +214,10 @@ total_months_to_cross = int((exact_cross_age - current_age) * 12)
 cross_years = max(0, total_months_to_cross // 12)
 cross_months = max(0, total_months_to_cross % 12)
 
-# EXTRA KPI KIJELZŐK CÉGVEZETŐKNEK
+# EXTRA KPI KIJELZŐK CÉGVEZETŐKNEK ÉS MAGÁNSZEMÉLYEKNEK
 if user_mode == "Céges igazgató / Vállalkozó":
     total_corporate_pension_paid = monthly_director_corporate * working_months
     corporation_tax_saved = total_corporate_pension_paid * 0.25
     
     col_dir1, col_dir2 = st.columns(2)
     col_dir1.success(f"💰 **A céged által megspórolt Társasági adó (Corporation Tax):** £{corporation_tax_saved:,.2f}")
-    col_dir2.info(f"📈 **Összes céges pénz, amit adómentesen kimentettél:** £{total_corporate_pension_paid:,.2f}")
-else:
